@@ -1,6 +1,6 @@
 # Wisp — A Local Answer-Engine Layer on Top of SearXNG
 
-**Status:** Design doc, not started. Standalone side project — separate from Mana, though Mana could become a consumer of it later.
+**Status:** Core pipeline scaffolded in Python and verified working end-to-end against a live SearXNG instance and a local LLM — retrieve, rerank, extract, rerank+prune, synthesize all run and return a cited answer. Not yet hardened (no real query-load testing, pruning margin still at its untuned default). Standalone side project — separate from Mana, though Mana could become a consumer of it later.
 
 **Name notes:** Wisp — chosen to reflect the core architecture decision: nothing is cached or persisted between queries. Every answer is gathered fresh and dissipates once served, like a wisp — no index, no standing crawl, no memory between requests.
 
@@ -118,10 +118,10 @@ Nothing is cached or stored between stages or between queries. Every request pay
 
 ## Known open questions
 
-Not yet resolved (the reranking design question was resolved separately — see Decision Record below):
+All resolved as of the first implementation pass (2026-08-15):
 
-- Failure handling is uneven across stages. Stage 3 has an explicit fallback (use the SearXNG snippet if a fetch fails). Stages 2 and 4 don't yet — worth defining before build: what happens if the embedding model fails or all snippets come back empty (Stage 2), and what happens if the LLM call fails or every extracted source is empty/unusable (Stage 4)? Reasonable default: degrade gracefully back toward raw SearXNG results rather than failing the whole query outright.
-- How Stage 2's reranker actually gets served isn't decided. Left open intentionally at design stage — options include a small local process alongside the rest of the pipeline, or folding it into whatever app framework ends up hosting Stages 2-4. Needs a dependency decision (e.g. a sentence-embedding library) once implementation starts.
+- Failure handling is now consistent across every stage that can fail. Stage 2 (embedding model fails, or every snippet is empty) skips reranking and passes SearXNG's original order through. Stage 3 falls back to the SearXNG snippet on a failed fetch, per source. Stage 4 (LLM call fails, or nothing usable survived pruning) returns the ranked source list with no synthesized prose rather than erroring the request. None of these degrade to a hard failure.
+- Stage 2's reranker is served in-process, as a plain Python module imported by the FastAPI app that hosts the whole pipeline — not a separate service. See Implementation below.
 
 ## Decision Record: Two-Pass Reranking (resolved 2026-08-15)
 
@@ -147,3 +147,21 @@ Not yet resolved (the reranking design question was resolved separately — see 
 ## Relationship to Mana
 
 Not a dependency in either direction right now. Mana already uses SearXNG directly via `/web/search` and `/web/read`. If/when this project is built out, Mana could become a consumer — pointing its web-access endpoints at this pipeline instead of (or in addition to) raw SearXNG — but that's a future integration decision, not a requirement of building this.
+
+## Implementation
+
+- **Stack:** Python, [uv](https://github.com/astral-sh/uv) for dependency management, FastAPI for the HTTP surface.
+- **Rerank (Stages 2 & 3.5):** `sentence-transformers/all-MiniLM-L6-v2`. Pruning keeps sources within an absolute cosine-similarity delta of the top score (default `0.05`), not a percentage — score ranges shift too much between queries for a percentage cutoff to behave consistently.
+- **Extract (Stage 3):** [`trafilatura`](https://github.com/adbar/trafilatura). Falls back to the SearXNG snippet whenever a fetch fails or returns nothing usable.
+- **Synthesize (Stage 4):** pluggable backend, picked per request — a local `llama-server` instance by default (no ongoing cost), or the Claude API as an opt-in alternative. Falls back to returning the ranked, un-synthesized source list if the LLM call fails or nothing survived pruning, rather than erroring the whole request.
+- **API:** a single `POST /query` endpoint (`{query, backend}`), bound to `127.0.0.1` only — this is a single-user local tool, not a public service.
+
+### Running it
+
+```
+uv sync
+cp .env.example .env   # fill in SEARXNG_URL / LLAMA_SERVER_URL / ANTHROPIC_API_KEY as needed
+uv run wisp             # starts the API on http://127.0.0.1:8899
+```
+
+Needs a reachable SearXNG instance (JSON output format enabled) and, for the default `local` backend, an OpenAI-compatible `llama-server` running locally.
