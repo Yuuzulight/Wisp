@@ -125,7 +125,9 @@ All resolved as of the first implementation pass (2026-08-15):
 
 ## Decision Record: Two-Pass Reranking (resolved 2026-08-15)
 
-**Decision:** Reranking happens twice, not once — a cheap first pass on SearXNG snippets (Stage 2, unchanged), then a second pass after extraction (new: Stage 3.5) that re-scores using real page content, reorders, and prunes weak sources before they reach synthesis. Pruning uses a relative cutoff — sources within some margin of the top-scoring result survive — rather than a fixed score threshold or fixed count. The margin itself is deliberately left as a tunable parameter, to be calibrated empirically once Stage 2 is built and real query data shows how similarity scores actually distribute.
+**Decision:** Reranking happens twice, not once — a cheap first pass on SearXNG snippets (Stage 2, unchanged), then a second pass after extraction (new: Stage 3.5) that re-scores using real page content, reorders, and prunes weak sources before they reach synthesis. Pruning uses a relative cutoff — sources within some margin of the top-scoring result survive — rather than a fixed score threshold or fixed count.
+
+**Margin calibration (2026-08-15):** Run against 10 real queries spanning factual, technical, current-events, and how-to phrasing (`scripts/calibrate_margin.py`), Stage 3.5 scores split into two clean clusters with no overlap: genuinely on-topic sources always land within 0.03-0.40 of the top score, while sources where extraction actually failed (near-zero or negative cosine similarity — garbage/boilerplate text, not a relevance judgment) land at 0.59+. The default margin is set to `0.45`, in the middle of that gap — tight enough to reliably drop extraction failures, loose enough to keep every source that's actually on-topic even when it's phrased very differently from the top result. Re-run the calibration script if real usage data ever shows this distribution shifting.
 
 **Why:** Snippet-only reranking (the original single-pass design) has a real weakness — SearXNG snippets are often thin (a meta description, not real content), so a genuinely strong source could be misjudged and filtered out before its full content is ever seen in Stage 3's extraction. A second rerank pass on real extracted text corrects for this.
 
@@ -151,7 +153,7 @@ Not a dependency in either direction right now. Mana already uses SearXNG direct
 ## Implementation
 
 - **Stack:** Python, [uv](https://github.com/astral-sh/uv) for dependency management, FastAPI for the HTTP surface.
-- **Rerank (Stages 2 & 3.5):** `sentence-transformers/all-MiniLM-L6-v2`. Pruning keeps sources within an absolute cosine-similarity delta of the top score (default `0.05`), not a percentage — score ranges shift too much between queries for a percentage cutoff to behave consistently.
+- **Rerank (Stages 2 & 3.5):** `sentence-transformers/all-MiniLM-L6-v2`. Pruning keeps sources within an absolute cosine-similarity delta of the top score (default `0.45`, calibrated against real queries — see the Decision Record below), not a percentage — score ranges shift too much between queries for a percentage cutoff to behave consistently.
 - **Extract (Stage 3):** [`trafilatura`](https://github.com/adbar/trafilatura). Falls back to the SearXNG snippet whenever a fetch fails or returns nothing usable.
 - **Synthesize (Stage 4):** pluggable backend, picked per request — a local `llama-server` instance by default (no ongoing cost), or the Claude API as an opt-in alternative. Falls back to returning the ranked, un-synthesized source list if the LLM call fails or nothing survived pruning, rather than erroring the whole request.
 - **API:** a single `POST /query` endpoint (`{query, backend}`), bound to `127.0.0.1` only — this is a single-user local tool, not a public service.

@@ -34,7 +34,11 @@ def load_settings() -> Settings:
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
         embedding_model=os.getenv("WISP_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
         extract_top_n=int(os.getenv("WISP_EXTRACT_TOP_N", "6")),
-        prune_margin=float(os.getenv("WISP_PRUNE_MARGIN", "0.05")),
+        # Calibrated against 10 real queries (see scripts/calibrate_margin.py):
+        # genuinely on-topic sources land within 0.03-0.40 of the top score,
+        # while extraction failures (near-zero/negative similarity) land at
+        # 0.59+, with a clean gap between the two -- 0.45 sits in that gap.
+        prune_margin=float(os.getenv("WISP_PRUNE_MARGIN", "0.45")),
         local_model=os.getenv("WISP_LOCAL_MODEL", "local"),
         claude_model=os.getenv("WISP_CLAUDE_MODEL", "claude-sonnet-5"),
     )
