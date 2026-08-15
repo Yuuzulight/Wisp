@@ -47,7 +47,7 @@ async def synthesize(query: str, sources: list[Source], backend: LLMBackend) -> 
             answer=None,
             sources=sources,
             synthesis_unavailable=True,
-            reason=f"LLM call failed: {exc}",
+            reason=f"LLM call failed: {type(exc).__name__}: {exc}",
         )
 
     return QueryResult(query=query, answer=answer, sources=sources)

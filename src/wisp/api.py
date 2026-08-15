@@ -17,11 +17,16 @@ app = FastAPI(title="Wisp")
 class QueryRequest(BaseModel):
     query: str
     backend: Literal["local", "claude"] = "local"
+    # Escape hatch: comma-separated SearXNG engine names (e.g. "google") to
+    # use instead of the default general-category set for this one request
+    # -- for when the defaults are degraded/rate-limited, or a specific
+    # engine fits the query better. Leave unset for normal operation.
+    engines: str | None = None
 
 
 @app.post("/query")
 async def query(request: QueryRequest) -> dict:
-    result = await run_query(request.query, request.backend, settings)
+    result = await run_query(request.query, request.backend, settings, engines=request.engines)
     return asdict(result)
 
 

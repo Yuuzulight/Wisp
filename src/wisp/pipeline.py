@@ -11,8 +11,8 @@ from wisp.retrieve import retrieve
 from wisp.synthesize import synthesize
 
 
-async def run_query(query: str, backend_name: str, settings: Settings) -> QueryResult:
-    results = await retrieve(query, settings.searxng_url)
+async def run_query(query: str, backend_name: str, settings: Settings, engines: str | None = None) -> QueryResult:
+    results = await retrieve(query, settings.searxng_url, engines=engines)
 
     results = rerank(query, results, settings.embedding_model, text_of=lambda s: s.snippet)
     candidates = results[: settings.extract_top_n]

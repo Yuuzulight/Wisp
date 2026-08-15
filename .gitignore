@@ -4,3 +4,4 @@ __pycache__/
 .env
 .pytest_cache/
 scripts/calibration_results.json
+scripts/stress_test_results.json

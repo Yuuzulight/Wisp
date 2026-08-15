@@ -15,11 +15,15 @@ class LocalBackend:
         self.model = model
 
     async def chat(self, system: str, user: str) -> str:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # CPU-only decode can run as slow as ~4-5 tok/s under load, so a
+        # normal-length response regularly takes 60-90s -- 300s gives real
+        # headroom instead of a tight timeout that reads as a random failure.
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(
                 f"{self.base_url}/v1/chat/completions",
                 json={
                     "model": self.model,
+                    "max_tokens": 600,
                     "messages": [
                         {"role": "system", "content": system},
                         {"role": "user", "content": user},

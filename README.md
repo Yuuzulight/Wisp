@@ -156,7 +156,7 @@ Not a dependency in either direction right now. Mana already uses SearXNG direct
 - **Rerank (Stages 2 & 3.5):** `sentence-transformers/all-MiniLM-L6-v2`. Pruning keeps sources within an absolute cosine-similarity delta of the top score (default `0.45`, calibrated against real queries — see the Decision Record below), not a percentage — score ranges shift too much between queries for a percentage cutoff to behave consistently.
 - **Extract (Stage 3):** [`trafilatura`](https://github.com/adbar/trafilatura). Falls back to the SearXNG snippet whenever a fetch fails or returns nothing usable.
 - **Synthesize (Stage 4):** pluggable backend, picked per request — a local `llama-server` instance by default (no ongoing cost), or the Claude API as an opt-in alternative. Falls back to returning the ranked, un-synthesized source list if the LLM call fails or nothing survived pruning, rather than erroring the whole request.
-- **API:** a single `POST /query` endpoint (`{query, backend}`), bound to `127.0.0.1` only — this is a single-user local tool, not a public service.
+- **API:** a single `POST /query` endpoint (`{query, backend, engines}`), bound to `127.0.0.1` only — this is a single-user local tool, not a public service. `engines` is an optional escape hatch (comma-separated SearXNG engine names, e.g. `"google"`) that overrides Stage 1's default engine set for that one request — for when the defaults are degraded/rate-limited, or a specific engine fits the query better (e.g. `stackoverflow` for a programming question). Leave it unset for normal operation; SearXNG's own default aggregation is the intended path, not this override.
 
 ### Running it
 
