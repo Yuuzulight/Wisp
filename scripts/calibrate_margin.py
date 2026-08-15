@@ -349,8 +349,13 @@ QUERIES = [
 ]
 
 
+# Escape hatch, not a default: set to e.g. "google" when SearXNG's default
+# engine set is degraded/rate-limited (see retrieve.py's `engines` param).
+ENGINES_OVERRIDE: str | None = None
+
+
 async def run_one(query: str) -> dict:
-    results = await retrieve(query, settings.searxng_url)
+    results = await retrieve(query, settings.searxng_url, engines=ENGINES_OVERRIDE)
     results = rerank(query, results, settings.embedding_model, text_of=lambda s: s.snippet)
     candidates = results[: settings.extract_top_n]
 
