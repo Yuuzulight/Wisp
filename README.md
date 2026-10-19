@@ -1,6 +1,6 @@
 # Wisp — A Local Answer-Engine Layer on Top of SearXNG
 
-**Status:** Core pipeline scaffolded in Python and verified working end-to-end against a live SearXNG instance and a local LLM — retrieve, rerank, extract, rerank+prune, synthesize all run and return a cited answer. Not yet hardened (no real query-load testing, pruning margin still at its untuned default). Standalone side project — separate from Mana, though Mana could become a consumer of it later.
+**Status:** Core pipeline scaffolded in Python and verified working end-to-end against a live SearXNG instance and a local LLM — retrieve, rerank, extract, rerank+prune, synthesize all run and return a cited answer. Not yet hardened (no real query-load testing). The pruning margin was calibrated on 2026-08-15 against 10 real queries and set to 0.45 (see the Decision Record below). Standalone side project — separate from Mana, though Mana could become a consumer of it later.
 
 **Name notes:** Wisp — chosen to reflect the core architecture decision: nothing is cached or persisted between queries. Every answer is gathered fresh and dissipates once served, like a wisp — no index, no standing crawl, no memory between requests.
 
@@ -47,8 +47,8 @@ User query
       original thin snippet
     - Reorder by this new score
     - Prune: keep only sources within a margin of the top score (relative
-      cutoff, not fixed threshold/count — margin itself TBD, calibrate
-      empirically once real query data exists)
+      cutoff, not fixed threshold/count — margin 0.45, calibrated
+      empirically on 2026-08-15; see the Decision Record)
     - Output: a pruned, reordered subset of sources — the ones that
       survive both the snippet pass AND the real-content pass
     ↓
@@ -88,7 +88,7 @@ Nothing is cached or stored between stages or between queries. Every request pay
 
 - Reuses the same embedding approach as Stage 2, just applied to extracted full text instead of snippets
 - Score each surviving source's full text against the query, same as Stage 2's method
-- Sort by this new score, then prune: keep everything within a relative margin of the top score (see Decision Record below — the exact margin is a tunable parameter, not fixed at design time)
+- Sort by this new score, then prune: keep everything within a relative margin of the top score (see Decision Record below — the margin is a tunable parameter, calibrated to 0.45 on 2026-08-15)
 - This stage is what actually fixes the "reranking on thin signal" problem — it's the reason a genuinely weak source that slipped through Stage 2's snippet-based judgment gets caught before reaching synthesis
 
 ### Stage 4 — Synthesize
@@ -112,7 +112,7 @@ Nothing is cached or stored between stages or between queries. Every request pay
 
 1. Rerank stage first, standalone — wire it directly onto existing SearXNG output, measure whether reordering actually improves result quality before building anything else
 2. Extract stage second — add full-page fetch/extraction on top of the reranked top-N, still no synthesis yet; verify extraction quality across a variety of real sites
-3. Rerank+Prune (Stage 3.5) third — reuse Stage 1's embedding approach on the now-extracted full text; this is also where the pruning margin gets calibrated empirically, using real query data from steps 1-2
+3. Rerank+Prune (Stage 3.5) third — reuse Stage 1's embedding approach on the now-extracted full text; this is also where the pruning margin was calibrated empirically, using real query data from steps 1-2 (done 2026-08-15)
 4. Synthesize last — the LLM/citation layer, since it depends on 1-3 already working well
 5. Iterate on recency weighting and failure handling once the core pipeline works end-to-end
 
